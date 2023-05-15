@@ -19,7 +19,7 @@ typedef struct {
 // Define how many pins to use as buttons
 #define BUTTONS_TOTAL 13
 // Debounce counter max value (lower = faster, higher = better debounce)
-#define DEBOUNCE_MAX_VALUE 1
+#define DEBOUNCE_MAX_VALUE 3
 
 typedef struct {
   int pin;
