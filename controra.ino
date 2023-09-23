@@ -126,8 +126,9 @@ void setup() {
     pinMode(button_pin_conf[i].pin, INPUT_PULLUP);
     digitalWrite(button_pin_conf[i].pin, HIGH);
   }
+  #ifndef DEBUG
   Keyboard.begin();
-  #ifdef DEBUG
+  #else
   Serial.begin(115200);
   #endif
 }
