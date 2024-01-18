@@ -1,7 +1,7 @@
 #include <Keyboard.h>
 
 // Uncomment to use serial port logging instead of real keyboard presses
-#define DEBUG
+// #define DEBUG
 
 // ---------- DEBOUNCE
 
@@ -22,16 +22,17 @@ typedef struct {
 // Number of milliseconds when it's not allowed to press another button in group after previous
 // was released. 17 is minimal whole number that is higher than 16.667 miliiseconds (1 game frame).
 // Seems to be enough for not to trigger instant input jumps to opposite direction in GGST.
-#define BUTTON_GROUP_DELAY_MS 17
+#define BUTTON_GROUP_DELAY_MS 34
 
 enum BUTTON_GROUP_TYPE {BUTTON_GROUP_NONE, BUTTON_GROUP_GHOSTING, BUTTON_GROUP_KNOCKOUTING};
 
-#define BUTTON_GROUP_CONTENT_CLEAR 0 // buffer content when it's empty
+#define BUTTON_GROUP_CONTENT_CLEAR -1 // buffer content when it's empty
 
 typedef struct {
   BUTTON_GROUP_TYPE type;
-  bool has_switch_delay;
+  // bool has_switch_delay; // always true for now
   int content; // value in buffer
+  int intent;
   unsigned long last_change_millis; // value of millis() call when content was changed
 } t_button_group;
 
@@ -50,8 +51,8 @@ typedef struct {
 
 #define BUTTON_GROUPS 2
 
-t_button_group group_direction_vertical = {BUTTON_GROUP_GHOSTING, true};
-t_button_group group_direction_horizontal = {BUTTON_GROUP_GHOSTING, true};
+t_button_group group_direction_vertical = {BUTTON_GROUP_GHOSTING, BUTTON_GROUP_CONTENT_CLEAR, BUTTON_GROUP_CONTENT_CLEAR, 0};
+t_button_group group_direction_horizontal = {BUTTON_GROUP_GHOSTING, BUTTON_GROUP_CONTENT_CLEAR, BUTTON_GROUP_CONTENT_CLEAR, 0};
 
 
 // Button mapping defines.
@@ -121,25 +122,57 @@ inline void button_handle_simple(int button_offset, DEBOUNCE_EVENT event) {
 }
 
 inline void button_handle_button_group_ghosting(int button_offset, t_button_group *group) {
-  static int button;
   static unsigned long current_millis;
-
-  button = button_pin_conf[button_offset].button;
   current_millis = millis();
 
   if (button_state[button_offset].pressed) {
     if (group->content == BUTTON_GROUP_CONTENT_CLEAR && \
         current_millis - group->last_change_millis > BUTTON_GROUP_DELAY_MS) {
-      group->content = button;
+      group->content = button_offset;
       button_handle_simple(button_offset, DEBOUNCE_EVENT_PRESSED);
     }
   } else {
-    if (group->content == button) {
+    if (group->content == button_offset) {
       group->last_change_millis = current_millis;
       group->content = BUTTON_GROUP_CONTENT_CLEAR;
       button_handle_simple(button_offset, DEBOUNCE_EVENT_RELEASED);
     }
   }
+}
+
+inline void button_handle_button_group_knockouting(int button_offset, DEBOUNCE_EVENT event, t_button_group *group) {
+  static unsigned long current_millis;
+  current_millis = millis();
+
+  if (event == DEBOUNCE_EVENT_PRESSED) {
+    group->intent = button_offset;
+    if (group->content != button_offset && group->content != BUTTON_GROUP_CONTENT_CLEAR) {
+        button_handle_simple(group->content, DEBOUNCE_EVENT_RELEASED);
+        group->content = BUTTON_GROUP_CONTENT_CLEAR;
+        group->last_change_millis = current_millis;
+    }
+  } else if (event == DEBOUNCE_EVENT_RELEASED) {
+    if (group->content == button_offset) {
+      button_handle_simple(button_offset, DEBOUNCE_EVENT_RELEASED);
+      group->content = BUTTON_GROUP_CONTENT_CLEAR;
+      group->last_change_millis = current_millis;
+    }
+    if (group->intent == button_offset) {
+      group->intent = BUTTON_GROUP_CONTENT_CLEAR;
+    }
+  }
+  if (group->intent != BUTTON_GROUP_CONTENT_CLEAR && current_millis - group->last_change_millis > BUTTON_GROUP_DELAY_MS) {
+    button_handle_simple(group->intent, DEBOUNCE_EVENT_PRESSED);
+    group->content = group->intent;
+    group->intent = BUTTON_GROUP_CONTENT_CLEAR;
+    group->last_change_millis = current_millis;
+  }
+  if (button_state[button_offset].pressed && current_millis - group->last_change_millis > BUTTON_GROUP_DELAY_MS && \
+      group->content == BUTTON_GROUP_CONTENT_CLEAR && group->content == BUTTON_GROUP_CONTENT_CLEAR) {
+        button_handle_simple(button_offset, DEBOUNCE_EVENT_PRESSED);
+        group->content = button_offset;
+        group->last_change_millis = current_millis;
+      }
 }
 
 void setup() {
@@ -174,23 +207,11 @@ void loop()
         button_handle_button_group_ghosting(i, group);
         break;
       case BUTTON_GROUP_KNOCKOUTING:
-        // TODO: implement
+        button_handle_button_group_knockouting(i, event, group);
         break;
       default:
         break;
       }
     }
   }
-  #ifdef DEBUG
-  static unsigned long current_millis, print_millis = 0;
-  current_millis = millis();
-  if (current_millis - print_millis > 200) {
-    Serial.print(">> | ");
-    Serial.print((char)group_direction_vertical.content);
-    Serial.print(" >> - ");
-    Serial.print((char)group_direction_horizontal.content);
-    Serial.print("\n");
-    print_millis = current_millis;
-  }
-  #endif
 }
