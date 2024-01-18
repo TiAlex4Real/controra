@@ -42,12 +42,12 @@ typedef struct {
 // Define board pin <-> button mappings here. See key macros in Keyboard.h.
 t_button_pin_conf button_pin_conf[BUTTONS_TOTAL] = {
   {0, 'w', DIRECTION_VERTICAL},
-  {1, 'j', DIRECION_NONE},
-  {2, ' ', DIRECION_NONE},
-  {3, KEY_RETURN, DIRECION_NONE},
-  {4, 't', DIRECION_NONE},
-  {5, 'o', DIRECION_NONE},
-  {6, 'k', DIRECION_NONE},
+  {1, 'n', DIRECION_NONE},
+  {2, 'j', DIRECION_NONE},
+  {3, 'k', DIRECION_NONE},
+  {4, 'l', DIRECION_NONE},
+  {5, 'p', DIRECION_NONE},
+  {6, 'o', DIRECION_NONE},
   {7, 'i', DIRECION_NONE},
   {8, 'u', DIRECION_NONE},
   {9, 'd', DIRECTION_HORIZONTAL},
