@@ -19,7 +19,14 @@ typedef struct {
 
 // ---------- BUTTON GROUPS
 
-enum BUTTON_GROUP_TYPE {BUTTON_GROUP_GHOSTING, BUTTON_GROUP_KNOCKOUTING};
+// Number of milliseconds when it's not allowed to press another button in group after previous
+// was released. 17 is minimal whole number that is higher than 16.667 miliiseconds (1 game frame).
+// Seems to be enough for not to trigger instant input jumps to opposite direction in GGST.
+#define BUTTON_GROUP_DELAY_MS 17
+
+enum BUTTON_GROUP_TYPE {BUTTON_GROUP_NONE, BUTTON_GROUP_GHOSTING, BUTTON_GROUP_KNOCKOUTING};
+
+#define BUTTON_GROUP_CONTENT_CLEAR 0 // buffer content when it's empty
 
 typedef struct {
   BUTTON_GROUP_TYPE type;
@@ -32,7 +39,7 @@ typedef struct {
 
 typedef struct {
   int pin; // pin number on board
-  int button; // button value 
+  int button; // button value
   t_button_group *button_group;
 } t_button_pin_conf;
 
@@ -41,10 +48,16 @@ typedef struct {
 // Define how many pins to use as buttons
 #define BUTTONS_TOTAL 13
 
+#define BUTTON_GROUPS 2
+
+t_button_group group_direction_vertical = {BUTTON_GROUP_GHOSTING, true};
+t_button_group group_direction_horizontal = {BUTTON_GROUP_GHOSTING, true};
+
+
 // Button mapping defines.
 // Define board pin <-> button mappings here. See key macros in Keyboard.h.
 t_button_pin_conf button_pin_conf[BUTTONS_TOTAL] = {
-  {0, 'w', NULL},
+  {0, 'w', &group_direction_vertical},
   {1, 'n', NULL},
   {2, 'j', NULL},
   {3, 'k', NULL},
@@ -53,9 +66,9 @@ t_button_pin_conf button_pin_conf[BUTTONS_TOTAL] = {
   {6, 'o', NULL},
   {7, 'i', NULL},
   {8, 'u', NULL},
-  {9, 'd', NULL},
-  {10, 's', NULL},
-  {11, 'a', NULL},
+  {9, 'd', &group_direction_horizontal},
+  {10, 's', &group_direction_vertical},
+  {11, 'a', &group_direction_horizontal},
   {12, 'q', NULL}
 };
 
@@ -107,6 +120,28 @@ inline void button_handle_simple(int button_offset, DEBOUNCE_EVENT event) {
   }
 }
 
+inline void button_handle_button_group_ghosting(int button_offset, t_button_group *group) {
+  static int button;
+  static unsigned long current_millis;
+
+  button = button_pin_conf[button_offset].button;
+  current_millis = millis();
+
+  if (button_state[button_offset].pressed) {
+    if (group->content == BUTTON_GROUP_CONTENT_CLEAR && \
+        current_millis - group->last_change_millis > BUTTON_GROUP_DELAY_MS) {
+      group->content = button;
+      button_handle_simple(button_offset, DEBOUNCE_EVENT_PRESSED);
+    }
+  } else {
+    if (group->content == button) {
+      group->last_change_millis = current_millis;
+      group->content = BUTTON_GROUP_CONTENT_CLEAR;
+      button_handle_simple(button_offset, DEBOUNCE_EVENT_RELEASED);
+    }
+  }
+}
+
 void setup() {
   memset(button_state, 0, sizeof(t_button_state) * BUTTONS_TOTAL);
   for (int i = 0; i < BUTTONS_TOTAL; ++i) {
@@ -129,7 +164,33 @@ void loop()
       debounce_dec(i);
     }
     DEBOUNCE_EVENT event = debounce_handle(i);
-    button_handle_simple(i, event);
+    t_button_group *group = button_pin_conf[i].button_group;
+    if (group == NULL) {
+      button_handle_simple(i, event);
+    } else {
+      switch (group->type)
+      {
+      case BUTTON_GROUP_GHOSTING:
+        button_handle_button_group_ghosting(i, group);
+        break;
+      case BUTTON_GROUP_KNOCKOUTING:
+        // TODO: implement
+        break;
+      default:
+        break;
+      }
+    }
   }
-  
+  #ifdef DEBUG
+  static unsigned long current_millis, print_millis = 0;
+  current_millis = millis();
+  if (current_millis - print_millis > 200) {
+    Serial.print(">> | ");
+    Serial.print((char)group_direction_vertical.content);
+    Serial.print(" >> - ");
+    Serial.print((char)group_direction_horizontal.content);
+    Serial.print("\n");
+    print_millis = current_millis;
+  }
+  #endif
 }
