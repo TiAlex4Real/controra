@@ -22,7 +22,7 @@ typedef struct {
 // Number of milliseconds when it's not allowed to press another button in group after previous
 // was released. 17 is minimal whole number that is higher than 16.667 miliiseconds (1 game frame).
 // Seems to be enough for not to trigger instant input jumps to opposite direction in GGST.
-#define BUTTON_GROUP_DELAY_MS 34
+#define BUTTON_GROUP_DELAY_MS 17
 
 enum BUTTON_GROUP_TYPE {BUTTON_GROUP_NONE, BUTTON_GROUP_GHOSTING, BUTTON_GROUP_KNOCKOUTING};
 
@@ -186,6 +186,14 @@ void setup() {
   #else
   Serial.begin(115200);
   #endif
+  if (!digitalRead(button_pin_conf[0].pin)) {
+    group_direction_vertical.type = BUTTON_GROUP_NONE;
+    group_direction_horizontal.type = BUTTON_GROUP_NONE;
+  }
+  if (!digitalRead(button_pin_conf[1].pin)) {
+    group_direction_vertical.type = BUTTON_GROUP_KNOCKOUTING;
+    group_direction_horizontal.type = BUTTON_GROUP_KNOCKOUTING;
+  }
 }
 
 void loop()
@@ -198,7 +206,7 @@ void loop()
     }
     DEBOUNCE_EVENT event = debounce_handle(i);
     t_button_group *group = button_pin_conf[i].button_group;
-    if (group == NULL) {
+    if (group == NULL || group->type == BUTTON_GROUP_NONE) {
       button_handle_simple(i, event);
     } else {
       switch (group->type)
